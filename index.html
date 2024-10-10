@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: black;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <iframe id="videoPlayer" src="" allowfullscreen></iframe>
+
+    <script>
+        // Function to get query parameters
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        // Get the IMDb ID from the URL query parameter
+        const imdbId = getQueryParam('id');
+        
+        if (imdbId) {
+            // Construct the iframe source URL
+            const iframeSrc = `https://lator308aoe.com/play/${imdbId}`;
+            
+            // Set the iframe src
+            document.getElementById('videoPlayer').src = iframeSrc;
+        } else {
+            document.body.innerHTML = '<h1 style="color:white;">Invalid IMDb ID</h1>';
+        }
+    </script>
+
+</body>
+</html>
