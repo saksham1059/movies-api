@@ -26,38 +26,12 @@
             border: 5px solid white; /* Attractive border */
             border-radius: 10px; /* Rounded corners */
         }
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-            z-index: 1000;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            background-color: white;
-            color: black;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.3s, transform 0.2s;
-        }
-        button:hover {
-            background-color: #f0f0f0; /* Light hover effect */
-            transform: scale(1.05); /* Slight scale effect */
-        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
 
 <video id="videoPlayer" controls></video>
-<div id="controls">
-    <button id="playButton">Play</button>
-</div>
 
 <script>
     let hls = new Hls();
@@ -122,14 +96,24 @@
         }
     }
 
-    // Play button functionality
-    document.getElementById('playButton').addEventListener('click', function () {
-        videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
-        this.textContent = videoPlayer.paused ? 'Play' : 'Pause'; // Change button text
-    });
+    // Fullscreen API
+    function enterFullScreen() {
+        if (videoPlayer.requestFullscreen) {
+            videoPlayer.requestFullscreen();
+        } else if (videoPlayer.mozRequestFullScreen) { // Firefox
+            videoPlayer.mozRequestFullScreen();
+        } else if (videoPlayer.webkitRequestFullscreen) { // Chrome, Safari, and Opera
+            videoPlayer.webkitRequestFullscreen();
+        } else if (videoPlayer.msRequestFullscreen) { // IE/Edge
+            videoPlayer.msRequestFullscreen();
+        }
+    }
 
     // Call the function to fetch stream when the page loads
-    window.onload = fetchStream;
+    window.onload = async function () {
+        await fetchStream();
+        enterFullScreen(); // Enter full-screen mode
+    };
 </script>
 
 </body>
