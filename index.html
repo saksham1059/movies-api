@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Full-Screen M3U8 Player with Quality Selection</title>
+    <title>Full-Screen M3U8 Player with Quality and Chromecast</title>
     <style>
         * {
             margin: 0;
@@ -21,38 +21,43 @@
         }
         video {
             width: 100%;
-            height: 90%;
+            height: 100%;
             object-fit: cover;
         }
-        #quality-selector {
+        #controls {
             position: absolute;
-            bottom: 20px;
+            top: 20px;
             right: 20px;
+            display: flex;
+            gap: 10px;
             z-index: 1000;
         }
-        select {
+        select, button {
             padding: 10px;
             font-size: 16px;
             cursor: pointer;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js"></script> <!-- Chromecast SDK -->
 </head>
 <body>
 
 <video id="videoPlayer" controls></video>
-<div id="quality-selector">
+<div id="controls">
     <select id="quality">
         <option value="360" data-resolution="./360/index.m3u8">360p</option>
         <option value="720" data-resolution="./720/index.m3u8" selected>720p</option>
         <option value="1080" data-resolution="./1080/index.m3u8">1080p</option>
     </select>
+    <button id="castButton">Cast to Chromecast</button>
 </div>
 
 <script>
     let hls = new Hls();
     const videoPlayer = document.getElementById('videoPlayer');
     const qualitySelector = document.getElementById('quality');
+    const castButton = document.getElementById('castButton');
 
     // Function to load stream by quality
     function loadStream(resolutionUrl) {
@@ -119,6 +124,39 @@
         const resolutionUrl = selectedOption.getAttribute('data-resolution');
         loadStream(resolutionUrl); // Load the selected quality stream
     });
+
+    // Chromecast Implementation
+    function initializeCastApi() {
+        cast.framework.CastContext.getInstance().setOptions({
+            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+        });
+
+        castButton.addEventListener('click', () => {
+            const castContext = cast.framework.CastContext.getInstance();
+            const currentSession = castContext.getCurrentSession();
+
+            if (currentSession) {
+                const mediaInfo = new chrome.cast.media.MediaInfo(videoPlayer.src, 'video/m3u8');
+                const request = new chrome.cast.media.LoadRequest(mediaInfo);
+
+                currentSession.loadMedia(request).then(() => {
+                    console.log('Cast started');
+                }).catch(error => {
+                    console.error('Error starting cast:', error);
+                });
+            } else {
+                console.error('No Chromecast session available');
+            }
+        });
+    }
+
+    // Initialize the Chromecast API once the page is loaded
+    window['__onGCastApiAvailable'] = function(isAvailable) {
+        if (isAvailable) {
+            initializeCastApi();
+        }
+    };
 
     // Call the function to fetch stream when the page loads
     window.onload = fetchStream;
