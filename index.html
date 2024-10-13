@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Full-Screen M3U8 Player</title>
+    <title>Full-Screen M3U8 Player with Quality Selection</title>
     <style>
         * {
             margin: 0;
@@ -15,13 +15,25 @@
             height: 100%;
             background-color: black;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
         }
         video {
             width: 100%;
-            height: 100%;
+            height: 90%;
             object-fit: cover;
+        }
+        #quality-selector {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        select {
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -29,13 +41,38 @@
 <body>
 
 <video id="videoPlayer" controls></video>
+<div id="quality-selector">
+    <select id="quality">
+        <option value="360" data-resolution="./360/index.m3u8">360p</option>
+        <option value="720" data-resolution="./720/index.m3u8" selected>720p</option>
+        <option value="1080" data-resolution="./1080/index.m3u8">1080p</option>
+    </select>
+</div>
 
 <script>
-    // Function to fetch stream using IMDb ID from URL
+    let hls = new Hls();
+    const videoPlayer = document.getElementById('videoPlayer');
+    const qualitySelector = document.getElementById('quality');
+
+    // Function to load stream by quality
+    function loadStream(resolutionUrl) {
+        if (hls) {
+            hls.destroy(); // Destroy previous instance of HLS
+            hls = new Hls();
+        }
+
+        hls.loadSource(resolutionUrl);
+        hls.attachMedia(videoPlayer);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            videoPlayer.play();
+        });
+    }
+
+    // Fetch and load the video with the default quality (1080p)
     async function fetchStream() {
         const urlParams = new URLSearchParams(window.location.search);
         const imdbId = urlParams.get('id');
-        const videoPlayer = document.getElementById('videoPlayer');
 
         if (!imdbId) {
             console.error("IMDb ID is missing from the URL.");
@@ -67,30 +104,21 @@
                 throw new Error("Failed to fetch stream link.");
             }
 
-            // Step 3: Set the video source and display the player
+            // Step 3: Load default 1080p quality if available
             const streamUrl = streamData.data.link;
+            loadStream(streamUrl.replace("./720/index.m3u8", "./1080/index.m3u8"));
 
-            // Load the stream into the video player
-            if (Hls.isSupported()) {
-                const hls = new Hls();
-                hls.loadSource(streamUrl);
-                hls.attachMedia(videoPlayer);
-
-                hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                    videoPlayer.play();
-                });
-            } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                videoPlayer.src = streamUrl;
-                videoPlayer.addEventListener('loadedmetadata', function () {
-                    videoPlayer.play();
-                });
-            } else {
-                throw new Error("This browser does not support M3U8 playback.");
-            }
         } catch (error) {
             console.error(error.message);
         }
     }
+
+    // Change the stream when the user selects a different quality
+    qualitySelector.addEventListener('change', function () {
+        const selectedOption = qualitySelector.options[qualitySelector.selectedIndex];
+        const resolutionUrl = selectedOption.getAttribute('data-resolution');
+        loadStream(resolutionUrl); // Load the selected quality stream
+    });
 
     // Call the function to fetch stream when the page loads
     window.onload = fetchStream;
