@@ -3,77 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fullscreen Vidstack HLS Player</title>
+    <title>Fullscreen HLS Player</title>
 
     <style>
-        /* Reset margins and paddings for full coverage */
+        /* Ensure full coverage */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body, html {
             width: 100%;
             height: 100%;
+            overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
             background-color: black;
         }
 
-        /* Ensure the media player takes up the full viewport */
-        #playerContainer {
+        /* Fullscreen media player */
+        media-player {
             width: 100%;
             height: 100%;
-            max-width: 100vw;
-            max-height: 100vh;
         }
 
         video {
             width: 100%;
             height: 100%;
-            object-fit: cover; /* Ensures video scales without distortion */
-            display: block;
+            object-fit: cover;
         }
     </style>
 
     <!-- HLS.js for handling .m3u8 streams -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <!-- Vidstack Player from CDN -->
+    <!-- Vidstack Player (Media Player) -->
     <script type="module" src="https://cdn.vidstack.io/player/stable/index.js"></script>
 </head>
 <body>
 
-<!-- Fullscreen Vidstack Player -->
-<media-player controls id="playerContainer">
-    <video id="videoPlayer" playsinline></video>
+<!-- Vidstack Player, which wraps the video element -->
+<media-player controls autoplay>
+    <video id="videoPlayer" playsinline controls></video>
 </media-player>
 
 <script>
     const videoPlayer = document.getElementById('videoPlayer');
-    let hls = new Hls();
+    let hls = null;
 
-    // Function to load the HLS stream with the provided URL
-    function loadStream(resolutionUrl) {
-        if (hls) {
-            hls.destroy(); // Clean up any previous instance
-            hls = new Hls(); // Create new HLS instance
+    // Function to load and play the HLS stream
+    function loadHLS(streamUrl) {
+        if (Hls.isSupported()) {
+            hls = new Hls(); // Initialize HLS instance
+            hls.loadSource(streamUrl); // Load the stream URL
+            hls.attachMedia(videoPlayer); // Attach it to the video element
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                videoPlayer.play(); // Play the video when ready
+            });
+        } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+            // For native support (Safari, etc.)
+            videoPlayer.src = streamUrl;
+            videoPlayer.addEventListener('canplay', function() {
+                videoPlayer.play();
+            });
         }
-
-        hls.loadSource(resolutionUrl); // Load the .m3u8 source
-        hls.attachMedia(videoPlayer);  // Attach it to the video element
-
-        hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            videoPlayer.play();  // Play video after HLS has parsed the manifest
-        });
-
-        hls.on(Hls.Events.ERROR, function (event, data) {
-            console.error("HLS error:", data);  // Error handling
-        });
     }
 
-    // Function to fetch and load the stream URL
+    // Fetch the stream and load it into the player
     async function fetchStream() {
         const urlParams = new URLSearchParams(window.location.search);
         const imdbId = urlParams.get('id');
@@ -84,7 +81,7 @@
         }
 
         try {
-            // Step 1: Get media info using IMDb ID
+            // Fetch media information based on IMDb ID
             const mediaInfoResponse = await fetch(`https://qrincxe-8-stream.onrender.com/api/v1/mediaInfo?id=${imdbId}`);
             const mediaInfoData = await mediaInfoResponse.json();
 
@@ -93,10 +90,10 @@
             }
 
             const { key, playlist } = mediaInfoData.data;
-            const firstLang = playlist[0]; // Fetch first available language
+            const firstLang = playlist[0];
             const file = firstLang.file;
 
-            // Step 2: Fetch the actual stream link using file and key
+            // Fetch stream link based on the file and key
             const streamResponse = await fetch('https://qrincxe-8-stream.onrender.com/api/v1/getStream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -108,16 +105,15 @@
                 throw new Error("Failed to fetch stream link.");
             }
 
-            // Step 3: Load the 1080p stream by modifying the URL
-            const streamUrl = streamData.data.link;
-            loadStream(streamUrl.replace("./720/index.m3u8", "./1080/index.m3u8"));
-
+            // Load the 1080p version of the stream (modify as needed)
+            const streamUrl = streamData.data.link.replace("./720/index.m3u8", "./1080/index.m3u8");
+            loadHLS(streamUrl); // Load the stream into the player
         } catch (error) {
-            console.error(error.message);
+            console.error("Error fetching stream:", error);
         }
     }
 
-    // Fetch stream on page load
+    // Load the stream when the page is ready
     window.onload = async function () {
         await fetchStream();
     };
