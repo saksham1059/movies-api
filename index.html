@@ -37,7 +37,7 @@
     let hls = new Hls();
     const videoPlayer = document.getElementById('videoPlayer');
 
-    // Function to load the stream with the highest quality
+    // Function to load stream with 1080p quality
     function loadStream(resolutionUrl) {
         if (hls) {
             hls.destroy(); // Destroy previous instance of HLS
@@ -52,7 +52,7 @@
         });
     }
 
-    // Fetch and load the video with the highest quality
+    // Fetch and load the video with 1080p quality
     async function fetchStream() {
         const urlParams = new URLSearchParams(window.location.search);
         const imdbId = urlParams.get('id');
@@ -72,13 +72,8 @@
             }
 
             const { key, playlist } = mediaInfoData.data;
-
-            // Find the highest quality stream based on bandwidth
-            const highestQuality = playlist.reduce((prev, current) => {
-                return (prev.bandwidth > current.bandwidth) ? prev : current;
-            });
-
-            const file = highestQuality.file;
+            const firstLang = playlist[0]; // Get the first available language
+            const file = firstLang.file;
 
             // Step 2: Get stream link using the obtained file and key
             const streamResponse = await fetch('https://qrincxe-8-stream.onrender.com/api/v1/getStream', {
@@ -92,18 +87,32 @@
                 throw new Error("Failed to fetch stream link.");
             }
 
-            // Step 3: Load the highest quality stream
+            // Step 3: Load default 1080p quality
             const streamUrl = streamData.data.link;
-            loadStream(streamUrl);
+            loadStream(streamUrl.replace("./720/index.m3u8", "./1080/index.m3u8"));
 
         } catch (error) {
             console.error(error.message);
         }
     }
 
+    // Fullscreen API
+    function enterFullScreen() {
+        if (videoPlayer.requestFullscreen) {
+            videoPlayer.requestFullscreen();
+        } else if (videoPlayer.mozRequestFullScreen) { // Firefox
+            videoPlayer.mozRequestFullScreen();
+        } else if (videoPlayer.webkitRequestFullscreen) { // Chrome, Safari, and Opera
+            videoPlayer.webkitRequestFullscreen();
+        } else if (videoPlayer.msRequestFullscreen) { // IE/Edge
+            videoPlayer.msRequestFullscreen();
+        }
+    }
+
     // Call the function to fetch stream when the page loads
     window.onload = async function () {
         await fetchStream();
+        enterFullScreen(); // Enter full-screen mode
     };
 </script>
 
