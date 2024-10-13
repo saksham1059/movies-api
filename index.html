@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Full-Screen M3U8 Player with Quality and Chromecast</title>
+    <title>Full-Screen M3U8 Player</title>
     <style>
         * {
             margin: 0;
@@ -15,51 +15,55 @@
             height: 100%;
             background-color: black;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
+            position: relative;
         }
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            border: 5px solid white; /* Attractive border */
+            border-radius: 10px; /* Rounded corners */
         }
         #controls {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
             gap: 10px;
             z-index: 1000;
         }
-        select, button {
-            padding: 10px;
+        button {
+            padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
+            background-color: white;
+            color: black;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        button:hover {
+            background-color: #f0f0f0; /* Light hover effect */
+            transform: scale(1.05); /* Slight scale effect */
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js"></script> <!-- Chromecast SDK -->
 </head>
 <body>
 
 <video id="videoPlayer" controls></video>
 <div id="controls">
-    <select id="quality">
-        <option value="360" data-resolution="./360/index.m3u8">360p</option>
-        <option value="720" data-resolution="./720/index.m3u8" selected>720p</option>
-        <option value="1080" data-resolution="./1080/index.m3u8">1080p</option>
-    </select>
-    <button id="castButton">Cast to Chromecast</button>
+    <button id="playButton">Play</button>
 </div>
 
 <script>
     let hls = new Hls();
     const videoPlayer = document.getElementById('videoPlayer');
-    const qualitySelector = document.getElementById('quality');
-    const castButton = document.getElementById('castButton');
 
-    // Function to load stream by quality
+    // Function to load stream with 1080p quality
     function loadStream(resolutionUrl) {
         if (hls) {
             hls.destroy(); // Destroy previous instance of HLS
@@ -74,7 +78,7 @@
         });
     }
 
-    // Fetch and load the video with the default quality (1080p)
+    // Fetch and load the video with 1080p quality
     async function fetchStream() {
         const urlParams = new URLSearchParams(window.location.search);
         const imdbId = urlParams.get('id');
@@ -109,7 +113,7 @@
                 throw new Error("Failed to fetch stream link.");
             }
 
-            // Step 3: Load default 1080p quality if available
+            // Step 3: Load default 1080p quality
             const streamUrl = streamData.data.link;
             loadStream(streamUrl.replace("./720/index.m3u8", "./1080/index.m3u8"));
 
@@ -118,45 +122,11 @@
         }
     }
 
-    // Change the stream when the user selects a different quality
-    qualitySelector.addEventListener('change', function () {
-        const selectedOption = qualitySelector.options[qualitySelector.selectedIndex];
-        const resolutionUrl = selectedOption.getAttribute('data-resolution');
-        loadStream(resolutionUrl); // Load the selected quality stream
+    // Play button functionality
+    document.getElementById('playButton').addEventListener('click', function () {
+        videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
+        this.textContent = videoPlayer.paused ? 'Play' : 'Pause'; // Change button text
     });
-
-    // Chromecast Implementation
-    function initializeCastApi() {
-        cast.framework.CastContext.getInstance().setOptions({
-            receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
-        });
-
-        castButton.addEventListener('click', () => {
-            const castContext = cast.framework.CastContext.getInstance();
-            const currentSession = castContext.getCurrentSession();
-
-            if (currentSession) {
-                const mediaInfo = new chrome.cast.media.MediaInfo(videoPlayer.src, 'video/m3u8');
-                const request = new chrome.cast.media.LoadRequest(mediaInfo);
-
-                currentSession.loadMedia(request).then(() => {
-                    console.log('Cast started');
-                }).catch(error => {
-                    console.error('Error starting cast:', error);
-                });
-            } else {
-                console.error('No Chromecast session available');
-            }
-        });
-    }
-
-    // Initialize the Chromecast API once the page is loaded
-    window['__onGCastApiAvailable'] = function(isAvailable) {
-        if (isAvailable) {
-            initializeCastApi();
-        }
-    };
 
     // Call the function to fetch stream when the page loads
     window.onload = fetchStream;
