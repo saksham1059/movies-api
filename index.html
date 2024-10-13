@@ -3,48 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Player</title>
+    <title>Full-Screen M3U8 Player</title>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: black;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            background-color: black;
         }
-        iframe {
+        video {
             width: 100%;
             height: 100%;
-            border: none;
+            object-fit: cover;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
 
-    <iframe id="videoPlayer" src="" allowfullscreen></iframe>
+<video id="videoPlayer" controls></video>
 
-    <script>
-        // Function to get query parameters
-        function getQueryParam(param) {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get(param);
+<script>
+    // Function to fetch stream using IMDb ID from URL
+    async function fetchStream() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const imdbId = urlParams.get('id');
+        const videoPlayer = document.getElementById('videoPlayer');
+
+        if (!imdbId) {
+            console.error("IMDb ID is missing from the URL.");
+            return;
         }
 
-        // Get the IMDb ID from the URL query parameter
-        const imdbId = getQueryParam('id');
-        
-        if (imdbId) {
-            // Construct the iframe source URL
-            const iframeSrc = `https://player.vidsrc.nl/embed/movie/${imdbId}?server=hindi`;
-            
-            // Set the iframe src
-            document.getElementById('videoPlayer').src = iframeSrc;
-        } else {
-            document.body.innerHTML = '<h1 style="color:white;">Invalid IMDb ID</h1>';
+        try {
+            // Step 1: Get media info using the provided IMDb ID
+            const mediaInfoResponse = await fetch(`https://8-stream-api.vercel.app/api/v1/mediaInfo?id=${imdbId}`);
+            const mediaInfoData = await mediaInfoResponse.json();
+
+            if (!mediaInfoData.success) {
+                throw new Error("Failed to fetch media info.");
+            }
+
+            const { key, playlist } = mediaInfoData.data;
+            const firstLang = playlist[0]; // Get the first available language
+            const file = firstLang.file;
+
+            // Step 2: Get stream link using the obtained file and key
+            const streamResponse = await fetch('https://8-stream-api.vercel.app/api/v1/getStream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file, key })
+            });
+            const streamData = await streamResponse.json();
+
+            if (!streamData.success) {
+                throw new Error("Failed to fetch stream link.");
+            }
+
+            // Step 3: Set the video source and display the player
+            const streamUrl = streamData.data.link;
+
+            // Load the stream into the video player
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(streamUrl);
+                hls.attachMedia(videoPlayer);
+
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    videoPlayer.play();
+                });
+            } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                videoPlayer.src = streamUrl;
+                videoPlayer.addEventListener('loadedmetadata', function () {
+                    videoPlayer.play();
+                });
+            } else {
+                throw new Error("This browser does not support M3U8 playback.");
+            }
+        } catch (error) {
+            console.error(error.message);
         }
-    </script>
+    }
+
+    // Call the function to fetch stream when the page loads
+    window.onload = fetchStream;
+</script>
 
 </body>
 </html>
