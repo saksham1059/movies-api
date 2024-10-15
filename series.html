@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Series Player with Seasons</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #videoPlayer {
+            width: 100%;
+            height: 60%;
+            object-fit: cover;
+            border: 5px solid white;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        #seasonSelector, #episodeSelector, #langSelector {
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px;
+            background-color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: grey;
+            color: white;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+<video id="videoPlayer" controls></video>
+<div id="seasonSelector"></div>
+<div id="episodeSelector"></div>
+<div id="langSelector"></div>
+
+<script>
+    let hls = new Hls();
+    const videoPlayer = document.getElementById('videoPlayer');
+    const seasonSelector = document.getElementById('seasonSelector');
+    const episodeSelector = document.getElementById('episodeSelector');
+    const langSelector = document.getElementById('langSelector');
+
+    let currentLang = 'English'; // Default language
+
+    // Function to load stream based on the selected episode and language
+    function loadStream(file, key) {
+        if (hls) {
+            hls.destroy();
+            hls = new Hls();
+        }
+        hls.loadSource(file);
+        hls.attachMedia(videoPlayer);
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            videoPlayer.play();
+        });
+    }
+
+    // Fetch and display available seasons
+    async function fetchSeasons() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const imdbId = urlParams.get('id');
+
+        if (!imdbId) {
+            console.error("IMDb ID is missing from the URL.");
+            return;
+        }
+
+        try {
+            // Step 1: Fetch season info
+            const seasonInfoResponse = await fetch(`https://qrincxe-8-stream.onrender.com/api/v1/getSeasonList?id=${imdbId}`);
+            const seasonInfoData = await seasonInfoResponse.json();
+
+            if (!seasonInfoData.success) {
+                throw new Error("Failed to fetch season info.");
+            }
+
+            // Step 2: Populate season and language buttons
+            const seasons = seasonInfoData.data.seasons;
+            seasons.forEach((season, seasonIndex) => {
+                const seasonButton = document.createElement('button');
+                seasonButton.textContent = season.season;
+                seasonButton.onclick = function () {
+                    fetchEpisodes(imdbId, seasonIndex + 1, season.lang); // Fetch episodes for the selected season
+                };
+                seasonSelector.appendChild(seasonButton);
+            });
+
+        } catch (error) {
+            console.error(error.message);
+        }
+    }
+
+    // Fetch and display available episodes for the selected season
+    async function fetchEpisodes(imdbId, seasonNumber, availableLangs) {
+        episodeSelector.innerHTML = ''; // Clear previous episodes
+        langSelector.innerHTML = ''; // Clear previous languages
+
+        try {
+            // Fetch media info to get episodes
+            const mediaInfoResponse = await fetch(`https://qrincxe-8-stream.onrender.com/api/v1/mediaInfo?id=${imdbId}`);
+            const mediaInfoData = await mediaInfoResponse.json();
+
+            if (!mediaInfoData.success) {
+                throw new Error("Failed to fetch media info.");
+            }
+
+            const { key, playlist } = mediaInfoData.data;
+            
+            // Step 1: Populate episodes (assuming each item in the playlist is an episode)
+            playlist.forEach((episode, index) => {
+                const episodeButton = document.createElement('button');
+                episodeButton.textContent = `Episode ${index + 1}`;
+                episodeButton.onclick = async function () {
+                    await fetchStream(episode.file, key);
+                };
+                episodeSelector.appendChild(episodeButton);
+            });
+
+            // Step 2: Populate languages
+            availableLangs.forEach(lang => {
+                const langButton = document.createElement('button');
+                langButton.textContent = lang;
+                langButton.onclick = function () {
+                    currentLang = lang;
+                };
+                langSelector.appendChild(langButton);
+            });
+
+        } catch (error) {
+            console.error(error.message);
+        }
+    }
+
+    // Fetch stream link for selected episode and language
+    async function fetchStream(file, key) {
+        try {
+            // Step 1: Fetch the stream link using the obtained file and key
+            const streamResponse = await fetch('https://qrincxe-8-stream.onrender.com/api/v1/getStream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file, key })
+            });
+            const streamData = await streamResponse.json();
+
+            if (!streamData.success) {
+                throw new Error("Failed to fetch stream link.");
+            }
+
+            // Step 2: Load stream with 1080p quality
+            const streamUrl = streamData.data.link;
+            loadStream(streamUrl.replace("./720/index.m3u8", "./1080/index.m3u8"));
+
+        } catch (error) {
+            console.error(error.message);
+        }
+    }
+
+    // Initialize page with seasons
+    window.onload = async function () {
+        await fetchSeasons();
+    };
+</script>
+
+</body>
+</html>
