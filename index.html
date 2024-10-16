@@ -1,142 +1,264 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fullscreen Vidstack HLS Player</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vidstack M3U8 Player with Language Selection</title>
+  
+  <!-- Vidstack CSS -->
+  <link rel="stylesheet" href="https://cdn.vidstack.io/player/theme.css" />
+  <link rel="stylesheet" href="https://cdn.vidstack.io/player/video.css" />
+  
+  <!-- Vidstack JS -->
+  <script src="https://cdn.vidstack.io/player" type="module"></script>
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body, html {
-            width: 100%;
-            height: 100%;
-            background-color: black;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+  <style>
+    body {
+      display: grid;
+      height: 100vh;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
+      background-color: black;
+    }
 
-        /* Make sure the player takes up the full page */
-        media-player {
-            width: 100%;
-            height: 100%;
-        }
+    media-player {
+      max-width: 100%;
+      height: auto;
+      width: 100%;
+      place-self: center;
+    }
 
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover; /* Maintain aspect ratio and crop overflow */
-            border: 5px solid white; /* Border like in the original */
-            border-radius: 10px;
-        }
-    </style>
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
 
-    <!-- HLS.js for handling m3u8 streams -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <!-- Vidstack Player (Media Player) -->
-    <script type="module" src="https://cdn.vidstack.io/player/stable/index.js"></script>
+    .modal-content {
+      background-color: #fff;
+      padding: 1.5rem;
+      border-radius: 10px;
+      text-align: center;
+      width: 90%;
+      max-width: 400px;
+    }
+
+    .modal-content h2 {
+      margin-bottom: 1rem;
+      font-size: 1.5rem;
+    }
+
+    .language-options button {
+      display: block;
+      margin: 10px auto;
+      padding: 0.8rem 1.5rem;
+      font-size: 1rem;
+      background-color: #007BFF;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .language-options button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Mobile styles */
+    @media (max-width: 768px) {
+      body {
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      media-player {
+        height: 50vh;
+      }
+
+      .modal-content {
+        padding: 1rem;
+        width: 80%;
+      }
+
+      .language-options button {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+      }
+
+      .modal-content h2 {
+        font-size: 1.2rem;
+      }
+    }
+
+    @media (orientation: landscape) and (max-width: 768px) {
+      media-player {
+        height: 60vh;
+      }
+
+      .modal-content {
+        padding: 1rem;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<!-- Vidstack Media Player wrapper -->
-<media-player autoplay controls>
-    <video id="videoPlayer" playsinline controls></video>
-</media-player>
+  <!-- Player -->
+  <media-player 
+       controls-delay="10000"
+       title="Movie Title"
+       crossorigin="anonymous"
+       src=""> <!-- No initial source -->
+    <media-provider>
+      <media-poster
+        class="vds-poster"
+        src=""
+        alt="Movie Poster"
+      ></media-poster>
+    </media-provider>
+    <media-video-layout thumbnails=""></media-video-layout>
+  </media-player>
 
-<script>
-    let hls = null;
-    const videoPlayer = document.getElementById('videoPlayer');
+  <!-- Language Selection Modal -->
+  <div id="languageModal" class="modal">
+    <div class="modal-content">
+      <h2>Select Language</h2>
+      <div class="language-options" id="languageOptions"></div>
+    </div>
+  </div>
 
-    // Function to load the stream via HLS.js
-    function loadStream(streamUrl) {
-        if (Hls.isSupported()) {
-            if (hls) {
-                hls.destroy(); // Clean up any previous instance
-            }
-            hls = new Hls();
-            hls.loadSource(streamUrl); // Load the m3u8 stream
-            hls.attachMedia(videoPlayer); // Attach the stream to the video element
+  <script>
+    const mediaPlayer = document.querySelector('media-player');
+    const languageModal = document.getElementById('languageModal');
+    const languageOptionsDiv = document.getElementById('languageOptions');
+    
+    let selectedLanguageFile = '';
 
-            hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                videoPlayer.play(); // Automatically play when parsed
-            });
-        } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-            // Fallback for browsers like Safari with native HLS support
-            videoPlayer.src = streamUrl;
-            videoPlayer.addEventListener('canplay', function () {
-                videoPlayer.play();
-            });
+    // OMDB API key and URL setup
+    const omdbApiKey = '19340f98';
+    const omdbApiUrl = 'http://www.omdbapi.com/';
+
+    // Function to fetch data from OMDB API
+    async function fetchOmdbData(imdbId) {
+      try {
+        const response = await fetch(`${omdbApiUrl}?i=${imdbId}&apikey=${omdbApiKey}`);
+        const omdbData = await response.json();
+        
+        if (omdbData.Response === 'True') {
+          console.log("OMDB Data:", omdbData);
+          return {
+            title: omdbData.Title,
+            poster: omdbData.Poster !== "N/A" ? omdbData.Poster : '',
+          };
+        } else {
+          throw new Error('Movie not found on OMDB.');
         }
+      } catch (error) {
+        console.error('Error fetching OMDB data:', error);
+        return null;
+      }
     }
 
-    // Function to fetch and load the stream
-    async function fetchStream() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const imdbId = urlParams.get('id');
+    // Function to load M3U8 stream based on selected language
+    async function fetchStream(file, key) {
+      try {
+        const streamResponse = await fetch('https://qrincxe-8-stream.onrender.com/api/v1/getStream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file, key })
+        });
+        const streamData = await streamResponse.json();
 
-        if (!imdbId) {
-            console.error("IMDb ID is missing from the URL.");
-            return;
+        if (!streamData.success) {
+          throw new Error("Failed to fetch stream link.");
         }
 
-        try {
-            // Step 1: Get media info using the provided IMDb ID
-            const mediaInfoResponse = await fetch(`https://qrincxe-8-stream.onrender.com/api/v1/mediaInfo?id=${imdbId}`);
-            const mediaInfoData = await mediaInfoResponse.json();
+        const streamUrl = streamData.data.link.replace("./720/index.m3u8", "./1080/index.m3u8");
+        console.log("Stream URL:", streamUrl);
+        
+        mediaPlayer.src = streamUrl; // Set the player source
 
-            if (!mediaInfoData.success) {
-                throw new Error("Failed to fetch media info.");
-            }
+      } catch (error) {
+        console.error(error.message);
+      }
+    }
+    
 
-            const { key, playlist } = mediaInfoData.data;
-            const firstLang = playlist[0]; // Get the first available language
-            const file = firstLang.file;
+    // Function to fetch and display available languages
+    async function fetchLanguages(imdbId) {
+      try {
+        const mediaInfoResponse = await fetch(`https://qrincxe-8-stream.onrender.com/api/v1/mediaInfo?id=${imdbId}`);
+        const mediaInfoData = await mediaInfoResponse.json();
 
-            // Step 2: Get stream link using the obtained file and key
-            const streamResponse = await fetch('https://qrincxe-8-stream.onrender.com/api/v1/getStream', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file, key })
-            });
-            const streamData = await streamResponse.json();
-
-            if (!streamData.success) {
-                throw new Error("Failed to fetch stream link.");
-            }
-
-            // Step 3: Load the default 1080p quality stream
-            const streamUrl = streamData.data.link.replace("./720/index.m3u8", "./1080/index.m3u8");
-            loadStream(streamUrl);
-
-        } catch (error) {
-            console.error("Error fetching stream:", error.message);
+        if (!mediaInfoData.success) {
+          throw new Error("Failed to fetch media info.");
         }
+
+        const { key, playlist } = mediaInfoData.data;
+        console.log("Available Languages:", playlist);
+
+        // Clear previous language options
+        languageOptionsDiv.innerHTML = '';
+
+        // Create language selection buttons
+        playlist.forEach(language => {
+          const langButton = document.createElement('button');
+          langButton.textContent = language.title || 'Unknown Language'; // Use the language title
+          langButton.onclick = (event) => {
+            event.preventDefault(); // Prevent any default action that might reload the page
+            selectedLanguageFile = language.file;
+            loadStreamForSelectedLanguage(selectedLanguageFile, key);
+          };
+          languageOptionsDiv.appendChild(langButton);
+        });
+
+        // Show the modal for language selection
+        languageModal.style.display = 'flex';
+
+      } catch (error) {
+        console.error(error.message);
+      }
     }
 
-    // Fullscreen API to handle entering fullscreen
-    function enterFullScreen() {
-        const mediaPlayer = document.querySelector('media-player');
-        if (mediaPlayer.requestFullscreen) {
-            mediaPlayer.requestFullscreen();
-        } else if (mediaPlayer.mozRequestFullScreen) { // Firefox
-            mediaPlayer.mozRequestFullScreen();
-        } else if (mediaPlayer.webkitRequestFullscreen) { // Chrome, Safari, and Opera
-            mediaPlayer.webkitRequestFullscreen();
-        } else if (mediaPlayer.msRequestFullscreen) { // IE/Edge
-            mediaPlayer.msRequestFullscreen();
-        }
+    // Load stream based on selected language and close modal
+    function loadStreamForSelectedLanguage(file, key) {
+      languageModal.style.display = 'none'; // Hide modal
+      fetchStream(file, key); // Load the selected stream
+      mediaPlayer.play(); // Start playing the video immediately
     }
 
-    // Call the function to fetch the stream and enter fullscreen on page load
+    // Call the function to fetch the stream and OMDB data when the page loads
     window.onload = async function () {
-        await fetchStream();
-        enterFullScreen();
+      const urlParams = new URLSearchParams(window.location.search);
+      const imdbId = urlParams.get('id');
+
+      if (!imdbId) {
+        console.error("IMDb ID is missing from the URL.");
+        return;
+      }
+
+      // Fetch movie title and poster
+      const movieData = await fetchOmdbData(imdbId);
+      if (movieData) {
+        mediaPlayer.title = movieData.title;
+        mediaPlayer.querySelector('media-poster').src = movieData.poster;
+      }
+
+      // Immediately fetch languages and show the modal
+      fetchLanguages(imdbId); // Fetch and show language options
     };
-</script>
+  </script>
 
 </body>
 </html>
